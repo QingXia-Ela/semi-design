@@ -12,6 +12,16 @@ import { omit } from 'lodash';
 
 let ellipsisContainer: HTMLElement;
 
+const canvasNode = document.createElement('canvas');
+const canvas2d = canvasNode.getContext('2d');
+
+canvasNode.style.position = 'fixed';
+canvasNode.style.left = '0';
+canvasNode.style.zIndex = '999';
+canvasNode.style.width = '9999px';
+
+document.body.appendChild(canvasNode);
+
 function pxToNumber(value: string) {
     if (!value) {
         return 0;
@@ -23,10 +33,117 @@ function pxToNumber(value: string) {
 function styleToString(style: CSSStyleDeclaration): string {
     // There are some different behavior between Firefox & Chrome.
     // We have to handle this ourself.
+    // stuck here
     const styleNames = Array.prototype.slice.apply(style);
     return styleNames.map((name: string) => `${name}: ${style.getPropertyValue(name)};`).join('');
 }
 
+const getRenderTextByCanvas = (
+    originEle: HTMLElement,
+    rows: number,
+    content = '',
+    fixedContent: {
+        expand: Node;
+        copy: Node
+    },
+    ellipsisStr: string,
+    suffix: string,
+    ellipsisPos: string,
+    isStrong: boolean,
+) => {
+    if (content.length === 0) {
+        return '';
+    }
+
+    // Get origin style, reflow once
+    // pick element real font style
+    const originStyle = window.getComputedStyle(originEle);
+    canvas2d.font = `${originStyle.font}`;
+    // console.log(originEle.style.font, originStyle.font);
+        
+    // Check if ellipsis in measure div is enough for content
+    const originEleWidth = originEle.offsetWidth;
+    // stuck here
+    function inRange() {
+        // canvas2d.clearRect(0,0,300,300)
+        // canvas2d.strokeText(`${textNode.textContent}...${ellipsisStr}`,0,50)
+        
+        const { actualBoundingBoxRight, actualBoundingBoxLeft } = canvas2d.measureText(`${textNode.textContent || ''}${ellipsisStr || ''}${fixedContent.expand?.textContent || ''}${fixedContent.copy?.textContent || ''}`);
+        const width = Math.ceil(actualBoundingBoxLeft + actualBoundingBoxRight + 8/** margin left */);
+        // If content does not wrap due to line break strategy, width should be judged to determine whether it's in range
+        const widthInRange = width <= originEleWidth;
+        const heightInRange = Math.ceil(width / originEleWidth) <= rows;
+        return rows === 1 ? widthInRange && heightInRange : heightInRange;
+    }
+
+    // ========================= Find match ellipsis content =========================
+    // Create origin content holder
+    const ellipsisContentHolder = document.createElement('span');
+    const textNode = { textContent: content };
+    // ellipsisContentHolder.appendChild(textNode);
+    if (suffix.length > 0) {
+        const ellipsisTextNode = document.createTextNode(suffix);
+        ellipsisContentHolder.appendChild(ellipsisTextNode);
+    }
+    // ellipsisContainer.appendChild(ellipsisContentHolder);
+
+    // Expand node needs to be added only when text needTruncated
+    // Object.values(omit(fixedContent, 'expand')).map(
+    //     node => node && ellipsisContainer.appendChild(node.cloneNode(true))
+    // );
+
+    function getCurrentText(text: string, pos: number) {
+        const end = text.length;
+        if (!pos) {
+            return ellipsisStr;
+        }
+        if (ellipsisPos === 'end') {
+            return text.slice(0, pos) + ellipsisStr;
+        }
+        return text.slice(0, pos) + ellipsisStr + text.slice(end - pos, end);
+    }
+
+    // Get maximum text
+    function measureText(
+        textNode: Text,
+        fullText: string,
+        startLoc = 0,
+        endLoc = fullText.length,
+        lastSuccessLoc = 0
+    ): string {
+        const midLoc = Math.floor((startLoc + endLoc) / 2);
+        const currentText = getCurrentText(fullText, midLoc);
+        textNode.textContent = currentText;
+        // console.log('calculating....', currentText);
+        if (startLoc >= endLoc - 1 && endLoc > 0) { // Loop when step is small
+            for (let step = endLoc; step >= startLoc; step -= 1) {
+                const currentStepText = getCurrentText(fullText, step);
+                textNode.textContent = currentStepText;
+                if (inRange()) {
+                    return currentStepText;
+                }
+            }
+        } else if (endLoc === 0) {
+            return ellipsisStr;
+        }
+
+        if (inRange()) {
+            return measureText(textNode, fullText, midLoc, endLoc, midLoc);
+        }
+        return measureText(textNode, fullText, startLoc, midLoc, lastSuccessLoc);
+    }
+
+    let resText = content;
+    // First judge whether the total length of fullText, plus suffix (possible)
+    // and copied icon (possible) meets expectations？ 
+    // If it does not meet expectations, add an expand button to find the largest  content that meets size limit
+    // 首先判断总文本长度，加上可能有的 suffix，复制按钮长度，看结果是否符合预期
+    // 如果不符合预期，则再加上展开按钮，找最大符合尺寸的内容
+    if (!inRange()) {
+        resText = measureText(textNode as any, content, 0, ellipsisPos === 'middle' ? Math.floor((content.length) / 2) : content.length);
+    }
+    return resText;
+};
 
 const getRenderText = (
     originEle: HTMLElement,
@@ -167,4 +284,4 @@ const getRenderText = (
     return resText;
 };
 
-export default getRenderText;
+export default getRenderTextByCanvas;

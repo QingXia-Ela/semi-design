@@ -486,6 +486,9 @@ export const EllipsisCollapsible = () => (
       Web 应用。 区别于其他的设计系统而言，Semi Design
       以用户中心、内容优先、设计人性化为设计理念，具有四大优势。
     </Paragraph>
+    <Paragraph ellipsis={{ rows: 3, collapsible: true, expandable: true }} style={{ width: 300 }}>
+      Semi Design 是由抖音前端团队与 UED 团队共同设计开发并维护的设计系统。
+    </Paragraph>
     <br />
     <Paragraph
       ellipsis={{
